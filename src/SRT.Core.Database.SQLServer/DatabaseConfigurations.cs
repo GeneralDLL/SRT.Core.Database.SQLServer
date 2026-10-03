@@ -6,10 +6,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SRT.Core;
 using SRT.Core.Database.SQLServer.UnitOfWorks;
 using SRT.Core.Databases;
 using SRT.Core.Domain;
-using System.Xml.Linq;
+using SRT.Core.Domain.Diagnostics;
+using SRT.Core.Interfaces.Databases;
 
 namespace SRT.Core.Database.SQLServer
 {
@@ -31,17 +33,18 @@ namespace SRT.Core.Database.SQLServer
             return AddGeneralConfig(builder, connectionStrings, lstType);
         }
 
+        private static readonly HashSet<Type> RegisteredContexts = new();
+
         private static WebApplicationBuilder AddGeneralConfig(WebApplicationBuilder builder, AppConnectionString connectionStrings, List<Type> lstType)
         {
-            foreach (var dbContextType in lstType)
+            foreach (var dbContextType in lstType.Where(t => typeof(DataBase).IsAssignableFrom(t)))
             {
-                // Create an instance of the DbContext using reflection
+                if (!RegisteredContexts.Add(dbContextType))
+                    throw new InvalidOperationException($"DbContext {dbContextType.FullName} is already registered.");
+
                 var optionsType = typeof(DbContextOptions<>).MakeGenericType(dbContextType);
-                var options = Activator.CreateInstance(optionsType); // You may need to pass actual options here
-
+                var options = Activator.CreateInstance(optionsType);
                 var dbContextInstance = Activator.CreateInstance(dbContextType, options, connectionStrings);
-
-                // Call the BaseConfiguration method
                 var configurationMethod = dbContextType.GetMethod("BaseConfiguration");
                 configurationMethod?.Invoke(dbContextInstance, new object[] { builder, connectionStrings });
             }
@@ -66,17 +69,14 @@ namespace SRT.Core.Database.SQLServer
 
         private static async Task<WebApplication> CheckDatabase(WebApplication app, List<Type> lstType, ILogger logger)
         {
-            foreach (Type item in lstType)
+            foreach (Type item in lstType.Where(t => typeof(DataBase).IsAssignableFrom(t)))
             {
                 string? pendingCsv = null;
                 try
                 {
                     using (var serviceScope = app.Services.GetRequiredService<IServiceScopeFactory>().CreateScope())
                     {
-                        var _dbContext = serviceScope.ServiceProvider.GetService(item) as DataBase;
-
-                        if (_dbContext is null)
-                            throw new Exception("db context is not existed");
+                        var _dbContext = (DataBase)serviceScope.ServiceProvider.GetRequiredService(item);
 
                         var db = _dbContext.Database;
                         var contextName = _dbContext.GetType().Name;
@@ -115,40 +115,44 @@ namespace SRT.Core.Database.SQLServer
 
                     using (var serviceScope = app.Services.GetRequiredService<IServiceScopeFactory>().CreateScope())
                     {
-                        var _dbContext = serviceScope.ServiceProvider.GetService(item) as DataBase;
-
-                        if (_dbContext is null)
-                            throw new Exception("db context is not existed");
+                        var _dbContext = (DataBase)serviceScope.ServiceProvider.GetRequiredService(item);
 
                         await _dbContext.InsertBaseData();
 
                         logger.LogWarning($"APP - Insert Basic Record: {_dbContext.GetType().Name} - OK");
                     }
 
+                    bool runIdentityGapFix;
                     using (var serviceScope = app.Services.GetRequiredService<IServiceScopeFactory>().CreateScope())
                     {
-                        var _dbContext = serviceScope.ServiceProvider.GetService(item) as DataBase;
-
-                        if (_dbContext is null)
-                            throw new Exception("db context is not existed");
+                        var _dbContext = (DataBase)serviceScope.ServiceProvider.GetRequiredService(item);
 
                         await _dbContext.ApplyStartupDataMaintenanceAsync();
+                        runIdentityGapFix = _dbContext.RunIdentityGapFix;
 
                         logger.LogWarning($"APP - Startup Data Maintenance: {_dbContext.GetType().Name} - OK");
                     }
 
-                    var fixIdentityMethod = typeof(CheckIdentifyGap)
-                        .GetMethod(nameof(CheckIdentifyGap.SRT_FixIdentityGapsAsync))
-                        ?.MakeGenericMethod(item);
+                    if (runIdentityGapFix)
+                    {
+                        var fixIdentityMethod = typeof(CheckIdentifyGap)
+                            .GetMethod(nameof(CheckIdentifyGap.SRT_FixIdentityGapsAsync))
+                            ?.MakeGenericMethod(item);
 
-                    if (fixIdentityMethod is null)
-                        throw new InvalidOperationException("SRT_FixIdentityGapsAsync method not found.");
+                        if (fixIdentityMethod is null)
+                            throw new InvalidOperationException("SRT_FixIdentityGapsAsync method not found.");
 
-                    var fixTask = fixIdentityMethod.Invoke(null, new object[] { app }) as Task;
-                    if (fixTask is null)
-                        throw new InvalidOperationException("Failed to invoke SRT_FixIdentityGapsAsync.");
+                        var fixTask = fixIdentityMethod.Invoke(null, new object[] { app }) as Task;
+                        if (fixTask is null)
+                            throw new InvalidOperationException("Failed to invoke SRT_FixIdentityGapsAsync.");
 
-                    await fixTask;
+                        await fixTask;
+                        logger.LogWarning("APP - Identity Gap Fix: {Context} - OK", item.Name);
+                    }
+                    else
+                    {
+                        logger.LogInformation("APP - Identity Gap Fix skipped for {Context} (RunIdentityGapFix=false)", item.Name);
+                    }
                 }
                 catch (Exception ex)
                 {

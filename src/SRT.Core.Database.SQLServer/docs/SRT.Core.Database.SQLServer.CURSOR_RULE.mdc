@@ -1,0 +1,34 @@
+---
+description: SRT.Core.Database.SQLServer — follow package AI_RULES when using or changing SQL Server DB infrastructure
+alwaysApply: false
+globs: "**/*Database*SQLServer*/**/*","**/SRT.Core.Database.SQLServer*/**/*","**/docs/SRT.Core.Database.SQLServer.*"
+---
+
+# SRT.Core.Database.SQLServer (Cursor rule template)
+
+This file is an **install template**. Copy it to the consumer project’s `.cursor/rules/` and keep the package-prefixed filename:
+
+`SRT.Core.Database.SQLServer.CURSOR_RULE.mdc`
+
+## Mandatory
+
+Before using or modifying this package, follow:
+
+- `docs/SRT.Core.Database.SQLServer.AI_RULES.md` (canonical)
+- `docs/SRT.Core.Database.SQLServer.API_REFERENCE.md`
+- `docs/SRT.Core.Database.SQLServer.COOKBOOK.md` for new DbContext / Repo / UoW
+
+## Working rule
+
+Read docs first. Do not invent APIs. If ambiguous, inspect related code and update the docs.
+
+## Hard constraints (summary)
+
+- Thin host `Program.cs`; no host `UseAuthorization` / `MapControllers`
+- Shared scoped `DataBase` across UoW repos; never dispose in repos
+- `autoSave: true` saves entire context; `DeleteByFilterAsync` is immediate
+- Bulk + tracked only inside `ExecuteInTransactionAsync`
+- Whitelist order fields for user search input; `PaginationHelper.MaxPageSize = 500`
+- `RunIdentityGapFix` default false; never downward identity reseed at startup
+- Cache / ErrorLog: inherit `DataBase`, do **not** use Repo/UoW bases
+- SQL cache is keyed `CacheServiceKeys.Sql` (SQL-only); unkeyed `ICacheRepository` is Redis; bind `Service` in every env appsettings

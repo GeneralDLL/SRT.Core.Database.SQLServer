@@ -1,0 +1,80 @@
+---
+description: ساختار استاندارد مستندات هر پکیج SRT برای انسان و Cursor/Claude/Codex
+alwaysApply: true
+---
+
+# Package documentation set
+
+When the user asks to **create or update documentation for an SRT package**, use this structure. Reference implementation: `SRT.Core.Database.SQLServer/src/SRT.Core.Database.SQLServer/docs/`.
+
+## Location
+
+Put all files in that package’s source `docs/` folder:
+
+`<PackageRoot>/src/<PackageName>/docs/`
+
+Do not scatter docs at repo root unless the user asks.
+
+## Naming
+
+Prefix **every** filename with the package name, including the trailing dot:
+
+`<PackageName>.README.md`  
+Example: `SRT.Core.Database.SQLServer.README.md`
+
+Never use bare `README.md`, `AGENTS.md`, or `CLAUDE.md` inside package `docs/` — consumers copy these files side-by-side with other packages.
+
+## Required files (exactly this set)
+
+| File | Role |
+|------|------|
+| `<PackageName>.README.md` | Index, reading order, session bootstrap paste |
+| `<PackageName>.HUMAN_GUIDE.md` | How the package works for humans |
+| `<PackageName>.API_REFERENCE.md` | Exact contracts from code: namespaces, signatures, defaults, errors |
+| `<PackageName>.COOKBOOK.md` | Self-contained recipes; examples must match API_REFERENCE |
+| `<PackageName>.AI_RULES.md` | Canonical MUST / MUST NOT for all AIs |
+| `<PackageName>.AGENTS.md` | Short Codex pointer → AI_RULES + API_REFERENCE + COOKBOOK |
+| `<PackageName>.CLAUDE.md` | Short Claude pointer → same |
+| `<PackageName>.CURSOR_RULE.mdc` | Cursor **template** (frontmatter + short pointer); not auto-applied from `docs/` |
+| `<PackageName>.AI_INSTALL.md` | Exact copy destinations per AI (see below) |
+
+Language: **English** with exact code identifiers. Internal links must use prefixed names only.
+
+## Content rules
+
+- Pin reviewed git SHA / package version at the top of API_REFERENCE.
+- Document **actual code**, not intended comments.
+- AI working rule: read docs first; do not invent APIs; if ambiguous, inspect related code and update the docs.
+- Tool files (`AGENTS`, `CLAUDE`, `CURSOR_RULE`) stay **short pointers**. `AI_RULES.md` is the single source of MUST/MUST NOT.
+- COOKBOOK must include a self-contained consumer startup/recipe, not only “see another repo’s rule”.
+- Files in `docs/` do not auto-apply to consumers. README + AI_INSTALL must say how to copy them.
+
+## AI_INSTALL destinations (substitute `<PackageName>`)
+
+Source: `<PackageRoot>/src/<PackageName>/docs/`  
+Keep prefixed filenames when copying. `<project>` = consumer repo root.
+
+**Shared knowledge** → `<project>/docs/`:
+
+- `README`, `HUMAN_GUIDE`, `API_REFERENCE`, `COOKBOOK`, `AI_RULES` (optional: `AI_INSTALL`)
+
+**Cursor**
+
+- `<PackageName>.CURSOR_RULE.mdc` → `<project>/.cursor/rules/`
+- `AI_RULES`, `API_REFERENCE`, `COOKBOOK` → `<project>/docs/`
+
+**Claude**
+
+- `<PackageName>.CLAUDE.md` → `<project>/` or `<project>/docs/`
+- Same knowledge trio in `<project>/docs/`
+- If the repo already has `CLAUDE.md`, add a one-line pointer; do not overwrite it by renaming to plain `CLAUDE.md`
+
+**Codex**
+
+- `<PackageName>.AGENTS.md` → `<project>/` or `<project>/docs/`
+- Same knowledge trio in `<project>/docs/`
+- If the repo already has `AGENTS.md`, add a one-line pointer; do not overwrite it
+
+## Updates
+
+When refreshing an existing package docs set: keep this file set and naming; add files that are missing; do not invent a parallel layout.
