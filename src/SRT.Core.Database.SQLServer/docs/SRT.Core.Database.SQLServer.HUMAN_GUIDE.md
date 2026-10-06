@@ -36,9 +36,11 @@ Your `MyAppSetting` / `AppSetting` controls which SQL features turn on.
 
 | Flag / condition | Effect |
 |------------------|--------|
-| `UseErrorLogSQL == true` (default `true`) | Registers ErrorReport context + scoped `IErrorLogger` |
-| `UseCashStructure == CashType.CashWithSQL` (default) | Registers Cache context + `ICacheSqlPersistence` + scoped `SqlBackedCacheRepository` + keyed `ICacheRepository` (`CacheServiceKeys.Sql`) |
+| `IsErrorLogSqlStore()` | `UseErrorLogSQL` (default `true`) **and** ErrorSQL `connectionType` (or inherited Default) is empty / `sql` / `sqlserver` → ErrorReport context + scoped `IErrorLogger` |
+| `IsCacheSqlStore()` | `CashWithSQL` (default) **and** CacheSQL `connectionType` (or inherited Default) is SQL Server → Cache context + `ICacheSqlPersistence` + scoped `SqlBackedCacheRepository` + keyed `ICacheRepository` (`CacheServiceKeys.Sql`) |
 | `IsSqlDatabaseRequested()` | `lstDatabaseNamespace` non-empty **and** `DefaultConnection.connectionType` empty / `sql` / `sqlserver` → registers each namespace’s `DataBase` types |
+
+Empty `connectionType` is SQL Server, not PostgreSQL. PostgreSQL ErrorLog/cache uses `IsErrorLogPostgresStore()` / `IsCachePostgresStore()` in the PostgreSQL package.
 
 Connection slots (must be configured when the feature is on):
 
@@ -99,7 +101,7 @@ SqlServerBasicConfigurations  (plugin)
 
 ## Cache subsystem (do not use IRepository)
 
-When `CashWithSQL` is on:
+When `IsCacheSqlStore()` is true:
 
 - `SqlBackedCacheRepository` is **SQL-only** (`CashBackup`). Ctor: `(CacheDBContext, AppSetting)` — `serviceID` / `serviceName` from `AppSetting`.
 - Registered as scoped concrete type **and** keyed `ICacheRepository` with `CacheServiceKeys.Sql` (`"sql"`). Unkeyed `ICacheRepository` is **not** this type (Redis owns it).
@@ -111,7 +113,7 @@ Implementations use `CacheDBContext` directly — **not** `BaseDBContextReposito
 
 ## ErrorLog subsystem (do not use IRepository)
 
-When `UseErrorLogSQL` is on:
+When `IsErrorLogSqlStore()` is true:
 
 - `ErrorLogger` implements `IErrorLogger`
 - Search/delete use `ErrorReportFilter` (at least one non-paging criterion required)

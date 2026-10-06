@@ -24,6 +24,7 @@ MUST:
 - Project-reference this package so `SqlServerBasicConfigurations` is discovered.
 - List each app DbContext namespace in `AppSetting.lstDatabaseNamespace`.
 - Configure the correct connection slots: `DefaultConnection`, `SRTCore_ErrorSQL`, `SRTCore_CacheSQL` as needed.
+- Set `connectionType` to empty/`sql`/`sqlserver` for SQL Server stores. Plugin registration uses `IsErrorLogSqlStore()` / `IsCacheSqlStore()` / `IsSqlDatabaseRequested()`, not the flags alone.
 - Bind `Service.Id` / `Service.Name` in every environment appsettings file (unique `Id` per microservice). Core copies them onto `AppSetting`; cache and ErrorLog persist those values.
 
 MUST NOT:

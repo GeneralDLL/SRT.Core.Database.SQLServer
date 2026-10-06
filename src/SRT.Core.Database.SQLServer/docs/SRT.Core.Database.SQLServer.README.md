@@ -2,7 +2,9 @@
 
 Package: **SRT.Core.Database.SQLServer**  
 Target: .NET 10 / EF Core SQL Server  
-Reviewed against: SQL Server repo `b738da8`, Core repo `9076228`
+Reviewed against: SQL Server repo `c73de99`, Core repo `95b0a5b`
+
+The GitHub homepage is the unprefixed repo-root `README.md`. This file is the **package docs index**.
 
 All filenames in this folder start with `SRT.Core.Database.SQLServer.` so you can copy the whole set into any consumer project without colliding with other packages’ docs.
 

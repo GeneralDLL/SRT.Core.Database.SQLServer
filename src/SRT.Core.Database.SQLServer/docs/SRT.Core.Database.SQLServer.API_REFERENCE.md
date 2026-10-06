@@ -1,6 +1,6 @@
 # SRT.Core.Database.SQLServer — API Reference
 
-Reviewed: SQL Server repo `b738da8`, Core repo `9076228`, with `DataBase.RunIdentityGapFix => false`.  
+Reviewed: SQL Server repo `c73de99`, Core repo `95b0a5b`, with `DataBase.RunIdentityGapFix => false`.  
 Prefer this document for consumption. If docs disagree with code, inspect the related source and update this file.
 
 ---
@@ -16,8 +16,8 @@ Prefer this document for consumption. If docs disagree with code, inspect the re
 
 | Condition | Registration |
 |-----------|--------------|
-| `configApp.UseErrorLogSQL` | `SRT_AddGeneralConfig(..., ErrorReportDBContext.Namespace)` + `AddScoped<IErrorLogger, ErrorLogger>()` |
-| `configApp.UseCashStructure == CashType.CashWithSQL` | Cache namespace config + `AddSingleton<ICacheSqlPersistence>` (`CacheSqlPersistence`, `IsAvailable => true`) + `AddScoped<SqlBackedCacheRepository>()` + `AddKeyedScoped<ICacheRepository>(CacheServiceKeys.Sql, …)` |
+| `configApp.IsErrorLogSqlStore()` | `SRT_AddGeneralConfig(..., ErrorReportDBContext.Namespace)` + `AddScoped<IErrorLogger, ErrorLogger>()` |
+| `configApp.IsCacheSqlStore()` | Cache namespace config + `AddSingleton<ICacheSqlPersistence>` (`CacheSqlPersistence`, `IsAvailable => true`) + `AddScoped<SqlBackedCacheRepository>()` + `AddKeyedScoped<ICacheRepository>(CacheServiceKeys.Sql, …)` |
 | `configApp.IsSqlDatabaseRequested()` | For each distinct `lstDatabaseNamespace` entry: `SRT_AddGeneralConfig(connectionStrings, ns)` |
 
 ### `SRT_ConfigApp(WebApplication app, AppSetting configApp)`
@@ -272,5 +272,8 @@ Relevant to this package (`SRT.Core.Domain.AppSetting`):
 - `UseErrorLogSQL` default `true`
 - `UseCashStructure` default `CashWithSQL`
 - `lstDatabaseNamespace` — namespace prefixes for app `DataBase` discovery
-- `IsSqlDatabaseRequested()` — namespaces non-empty and connection type empty/`sql`/`sqlserver`
+- Empty `connectionType` is treated as SQL Server (`IsSqlServerConnectionType`)
+- `IsErrorLogSqlStore()` — `UseErrorLogSQL` and `ResolveRelationalStoreType(SRTCore_ErrorSQL)` is SQL Server
+- `IsCacheSqlStore()` — `CashWithSQL` and `ResolveRelationalStoreType(SRTCore_CacheSQL)` is SQL Server
+- `IsSqlDatabaseRequested()` — namespaces non-empty and `DefaultConnection.connectionType` empty/`sql`/`sqlserver`
 - `ServiceId` / `ServiceName` — bound by Core `BindServiceIdentity` from `Service:Id` / `Service:Name` (fallback `ServiceId` / `ServiceName`)

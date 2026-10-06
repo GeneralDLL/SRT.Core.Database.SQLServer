@@ -36,10 +36,11 @@ public static class BasicProjectConfig
 
             ConnectionStrings = new AppConnectionString
             {
-                DefaultConnection = new GeneralConnectionString { /* host, port, dbName, user, password, connectionType = "sqlserver" */ },
-                SRTCore_ErrorSQL = new GeneralConnectionString { /* ... */ },
-                SRTCore_CacheSQL = new GeneralConnectionString { /* ... */ },
+                DefaultConnection = new GeneralConnectionString { /* host, port, dbName, user, pass, connectionType = "sqlserver" or empty */ },
+                SRTCore_ErrorSQL = new GeneralConnectionString { /* inherit type from Default if empty */ },
+                SRTCore_CacheSQL = new GeneralConnectionString { /* inherit type from Default if empty */ },
             },
+            // Plugin gates: IsErrorLogSqlStore() / IsCacheSqlStore() / IsSqlDatabaseRequested()
         };
     }
 
