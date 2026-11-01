@@ -36,14 +36,9 @@ namespace SRT.Core.Database.SQLServer.ErrorLog
                     pass = "SaeedTNT220"
                 };
 
-                optionsBuilder.UseSqlServer(connection.GetConnectionString())
-                              .LogTo
-                              (
-                               Console.WriteLine,
-                               new[] { DbLoggerCategory.Database.Command.Name },
-                               Microsoft.Extensions.Logging.LogLevel.Information
-                              )
-                              .EnableSensitiveDataLogging();
+                // Design-time fallback only (no DI options). No SQL command logging and no sensitive data logging here:
+                // a library must not print parameter values.
+                optionsBuilder.UseSqlServer(connection.GetConnectionString());
             }
         }
         #endregion
@@ -79,7 +74,8 @@ namespace SRT.Core.Database.SQLServer.ErrorLog
                 entity.Property(e => e.Service).HasMaxLength(200);
                 entity.Property(e => e.Environment).HasMaxLength(50);
                 entity.Property(e => e.Version).HasMaxLength(100);
-                entity.Property(e => e.Category).HasMaxLength(50);
+                // SQL Server column names ignore case, so this cannot share the name of the legacy category column.
+                entity.Property(e => e.Category).HasMaxLength(50).HasColumnName("DiagCategory");
                 entity.Property(e => e.Operation).HasMaxLength(100);
                 entity.Property(e => e.Severity).HasMaxLength(20);
                 entity.Property(e => e.Outcome).HasMaxLength(30);

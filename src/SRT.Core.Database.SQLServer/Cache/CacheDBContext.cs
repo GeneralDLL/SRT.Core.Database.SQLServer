@@ -36,14 +36,9 @@ namespace SRT.Core.Database.SQLServer.Cache
                     pass = "SaeedTNT220"
                 };
 
-                optionsBuilder.UseSqlServer(connection.GetConnectionString())
-                              .LogTo
-                              (
-                               Console.WriteLine,
-                               new[] { DbLoggerCategory.Database.Command.Name },
-                               Microsoft.Extensions.Logging.LogLevel.Information
-                              )
-                              .EnableSensitiveDataLogging();
+                // Design-time fallback only (no DI options). No SQL command logging and no sensitive data logging here:
+                // a library must not print parameter values.
+                optionsBuilder.UseSqlServer(connection.GetConnectionString());
             }
         }
         #endregion

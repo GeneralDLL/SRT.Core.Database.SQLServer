@@ -112,7 +112,7 @@ WHERE t.is_ms_shipped = 0
             if (currentIdentity > maxId)
             {
                 // Natural gaps (deletes/rollbacks) must not trigger downward reseed at startup.
-                logger.LogInformation(
+                logger.LogDebug(
                     "Identity ahead of data (log only): {Schema}.{Table}.{Column} currentIdentity={CurrentIdentity} maxId={MaxId}",
                     table.SchemaName,
                     table.TableName,

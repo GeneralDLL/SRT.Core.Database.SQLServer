@@ -69,9 +69,14 @@ namespace SRT.Core.Database.SQLServer
 
         private static async Task<WebApplication> CheckDatabase(WebApplication app, List<Type> lstType, ILogger logger)
         {
+            var report = app.Services.GetService<SRTStartupReport>();
             foreach (Type item in lstType.Where(t => typeof(DataBase).IsAssignableFrom(t)))
             {
                 string? pendingCsv = null;
+                var section = "sql." + item.Name;
+                var step = "connect";
+                var target = "";
+                var parts = new List<string>();
                 try
                 {
                     using (var serviceScope = app.Services.GetRequiredService<IServiceScopeFactory>().CreateScope())
@@ -81,11 +86,13 @@ namespace SRT.Core.Database.SQLServer
                         var db = _dbContext.Database;
                         var contextName = _dbContext.GetType().Name;
                         var migrateTarget = DescribeSqlTarget(db.GetConnectionString());
+                        target = migrateTarget;
 
                         var lstPending = (await db.GetPendingMigrationsAsync()).ToList();
                         pendingCsv = lstPending.Count > 0 ? string.Join(", ", lstPending) : null;
 
-                        logger.LogWarning(
+                        step = "migrate";
+                        logger.LogDebug(
                             "APP - Migrate start: {Context} target={Target} pendingCount={PendingCount} pending=[{Pending}]",
                             contextName,
                             migrateTarget,
@@ -106,7 +113,10 @@ namespace SRT.Core.Database.SQLServer
 
                         var applied = await db.GetAppliedMigrationsAsync().ConfigureAwait(false);
                         var lastApplied = applied.LastOrDefault();
-                        logger.LogWarning(
+                        parts.Add(lstPending.Count > 0
+                            ? $"migrations: applied {lstPending.Count} [{pendingCsv}] last={lastApplied ?? "(none)"}"
+                            : $"migrations: up-to-date last={lastApplied ?? "(none)"}");
+                        logger.LogDebug(
                             "APP - Migrate done: {Context} target={Target} lastApplied={LastApplied}",
                             contextName,
                             migrateTarget,
@@ -117,9 +127,11 @@ namespace SRT.Core.Database.SQLServer
                     {
                         var _dbContext = (DataBase)serviceScope.ServiceProvider.GetRequiredService(item);
 
+                        step = "seed";
                         await _dbContext.InsertBaseData();
+                        parts.Add("seed OK");
 
-                        logger.LogWarning($"APP - Insert Basic Record: {_dbContext.GetType().Name} - OK");
+                        logger.LogDebug("APP - Insert Basic Record: {Context} - OK", _dbContext.GetType().Name);
                     }
 
                     bool runIdentityGapFix;
@@ -127,14 +139,17 @@ namespace SRT.Core.Database.SQLServer
                     {
                         var _dbContext = (DataBase)serviceScope.ServiceProvider.GetRequiredService(item);
 
+                        step = "maintenance";
                         await _dbContext.ApplyStartupDataMaintenanceAsync();
                         runIdentityGapFix = _dbContext.RunIdentityGapFix;
+                        parts.Add("maintenance OK");
 
-                        logger.LogWarning($"APP - Startup Data Maintenance: {_dbContext.GetType().Name} - OK");
+                        logger.LogDebug("APP - Startup Data Maintenance: {Context} - OK", _dbContext.GetType().Name);
                     }
 
                     if (runIdentityGapFix)
                     {
+                        step = "identity-gap";
                         var fixIdentityMethod = typeof(CheckIdentifyGap)
                             .GetMethod(nameof(CheckIdentifyGap.SRT_FixIdentityGapsAsync))
                             ?.MakeGenericMethod(item);
@@ -147,15 +162,24 @@ namespace SRT.Core.Database.SQLServer
                             throw new InvalidOperationException("Failed to invoke SRT_FixIdentityGapsAsync.");
 
                         await fixTask;
-                        logger.LogWarning("APP - Identity Gap Fix: {Context} - OK", item.Name);
+                        parts.Add("identity-gap fixed");
+                        logger.LogDebug("APP - Identity Gap Fix: {Context} - OK", item.Name);
                     }
                     else
                     {
-                        logger.LogInformation("APP - Identity Gap Fix skipped for {Context} (RunIdentityGapFix=false)", item.Name);
+                        parts.Add("identity-gap skipped");
+                        logger.LogDebug("APP - Identity Gap Fix skipped for {Context} (RunIdentityGapFix=false)", item.Name);
                     }
+
+                    report?.Ok(section, target + " | " + string.Join(" | ", parts));
                 }
                 catch (Exception ex)
                 {
+                    parts.Add($"{step} FAILED: {ex.GetType().Name}: {ex.Message}");
+                    if (pendingCsv is not null && step == "migrate")
+                        parts.Add($"pending=[{pendingCsv}]");
+                    report?.Failed(section, (string.IsNullOrEmpty(target) ? "" : target + " | ") + string.Join(" | ", parts));
+
                     var scopeFactory = app.Services.GetRequiredService<IServiceScopeFactory>();
                     var conn = app.Services.GetService<AppConnectionString>()?.DefaultConnection;
                     await DiagnosticReporter.ReportAsync(
@@ -190,6 +214,7 @@ namespace SRT.Core.Database.SQLServer
 
             string? server = null;
             string? database = null;
+            string? user = null;
             foreach (var part in connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
                 var idx = part.IndexOf('=');
@@ -204,12 +229,19 @@ namespace SRT.Core.Database.SQLServer
                 else if (key.Equals("Initial Catalog", StringComparison.OrdinalIgnoreCase)
                          || key.Equals("Database", StringComparison.OrdinalIgnoreCase))
                     database = value;
+                else if (key.Equals("User ID", StringComparison.OrdinalIgnoreCase)
+                         || key.Equals("UID", StringComparison.OrdinalIgnoreCase)
+                         || key.Equals("User", StringComparison.OrdinalIgnoreCase))
+                    user = value;
             }
 
             if (server is null && database is null)
                 return "(unparsed connection)";
 
-            return $"{server ?? "?"} / {database ?? "?"}";
+            // Never add the password here: this text goes to the startup summary and to telemetry.
+            return user is null
+                ? $"{server ?? "?"} / {database ?? "?"}"
+                : $"{server ?? "?"} / {database ?? "?"} user={user}";
         }
         #endregion
     }

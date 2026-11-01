@@ -64,10 +64,10 @@ namespace SRT.Core.Database.SQLServer
 
         public async Task<WebApplication> SRT_ConfigApp(WebApplication app, AppSetting configApp)
         {
-            var namespaces = new List<string>();
+            var namespaces = new HashSet<string>();
 
             if (configApp.IsSqlDatabaseRequested())
-                namespaces.AddRange(configApp.lstDatabaseNamespace);
+                configApp.lstDatabaseNamespace.ForEach(r => namespaces.Add(r));
 
             if (configApp.IsErrorLogSqlStore())
                 namespaces.Add(typeof(ErrorReportDBContext).Namespace!);
@@ -75,7 +75,7 @@ namespace SRT.Core.Database.SQLServer
             if (configApp.IsCacheSqlStore())
                 namespaces.Add(typeof(SqlCache.CacheDBContext).Namespace!);
 
-            foreach (var ns in namespaces.Distinct())
+            foreach (var ns in namespaces)
                 await app.SRT_CheckDatabase(ns);
 
             return app;

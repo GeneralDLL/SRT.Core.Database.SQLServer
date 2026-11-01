@@ -56,7 +56,7 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Migrations
                     Service = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     Environment = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     Version = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    Category = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    Category = table.Column<string>(name: "DiagCategory", type: "nvarchar(50)", maxLength: 50, nullable: true),
                     Operation = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     Severity = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
                     Outcome = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
@@ -77,7 +77,7 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_ErrorReports_Category_date",
                 table: "ErrorReports",
-                columns: new[] { "Category", "date" });
+                columns: new[] { "DiagCategory", "date" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_ErrorReports_CorrelationId",

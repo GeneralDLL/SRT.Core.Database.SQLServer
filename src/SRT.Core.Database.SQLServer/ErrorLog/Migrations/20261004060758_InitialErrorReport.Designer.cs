@@ -35,7 +35,8 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Migrations
 
                     b.Property<string>("Category")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("DiagCategory");
 
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
