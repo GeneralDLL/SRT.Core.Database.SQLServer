@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using SRT.Core.Database.SQLServer.ErrorLog;
+using SRT.Core.Database.SQLServer.ErrorLog.Controllers;
 using SRT.Core.Database.SQLServer.ErrorLog.Repository;
+using SRT.Core.Database.SQLServer.ErrorLog.Retention;
 using SqlCache = SRT.Core.Database.SQLServer.Cache;
 using SRT.Core.Domain;
 using SRT.Core.Interfaces;
@@ -32,6 +34,10 @@ namespace SRT.Core.Database.SQLServer
             {
                 builder.SRT_AddGeneralConfig(configApp.ConnectionStrings, typeof(ErrorReportDBContext).Namespace!);
                 builder.Services.AddScoped<IErrorLogger, ErrorLogger>();
+                builder.Services.AddControllers().ConfigureApplicationPartManager(
+                    manager => manager.FeatureProviders.Add(new ErrorLogsControllerFeatureProvider()));
+                builder.Services.Configure<ErrorLogRetentionOptions>(builder.Configuration.GetSection(ErrorLogRetentionOptions.SectionName));
+                builder.Services.AddHostedService<ErrorLogRetentionService>();
             }
             #endregion
 

@@ -124,7 +124,7 @@ Task<int> DeleteByFilterAsync(Expression<Func<TEntity, bool>> predicate, Cancell
 | `IDatabaseEntryID` | `: IDatabaseEntryID<int>` |
 | `IDatabaseEntryActivity` | `bool isActive` |
 | `IDatabaseEntryAdmin` | `int? id_AdminChange`, `string? fullName_AdminChange` |
-| `IUserInfo` | `: IDatabaseEntryID`; `GetFullName()`, `UserRoleType userRole` |
+| `IUserInfo` | `: IDatabaseEntryID`; `GetFullName()`, `string userType` |
 
 ### Search / paging — `SRT.Core.Domain.BaseDomains`
 
@@ -262,6 +262,40 @@ Task<int> DeleteByFilterAsync(ErrorReportFilter filter, CancellationToken ct = d
 `ErrorLogger` ctor takes `AppSetting`; persisted rows use `AppSetting.ServiceId` / `ServiceName` (empty name → process friendly name).
 
 Types: `ErrorReportDBContext`, `ErrorReport`, `ErrorLogger`, design-time factory, migrations under `ErrorLog/`.
+
+### نمایشگر لاگ خطا (پنل DevOps)
+
+وقتی `IsErrorLogSqlStore()` درست باشد، `SRTErrorLogsController` با `ErrorLogsControllerFeatureProvider` روی همان سرویس باز می‌شود و سرویس کد جدا نمی‌خواهد. کلاس کنترلر `internal` است تا کشف پیش‌فرض MVC آن را نبیند. Auth همهٔ اکشن‌ها `CheckAuthMiddleWare("DevOps")` با `requiredAccess` است، پس هدر `X-Active-Role` لازم است. superadmin هر دو چک را رد می‌کند.
+
+| روش و مسیر | دسترسی | بدنه | خروجی |
+|---|---|---|---|
+| `POST devops/error-logs/Search` | `devops.errorlogs.View` | `ErrorReportFilter` | `ErrorReportPage` |
+| `GET devops/error-logs/{id}` | `devops.errorlogs.View` | ندارد | `ErrorReportDetail` یا 404 |
+| `GET devops/error-logs/ByCorrelation/{correlationId}` | `devops.errorlogs.View` | ندارد | حداکثر 200 `ErrorReportSummary`، بدون بازهٔ زمانی |
+| `POST devops/error-logs/Facets` | `devops.errorlogs.View` | `ErrorReportFilter` | مقدار و شمارش `Severity`، `Category`، `Outcome`، `ExceptionType`، `Environment`، `Version`، `Operation`. فقط بازهٔ زمانی اثر دارد. هر کدام حداکثر 50 مقدار |
+| `POST devops/error-logs/Stats` | `devops.errorlogs.View` | `ErrorReportFilter` | `ErrorReportStats`: تا 48 ساعت سطل ساعتی، بیشتر سطل روزانه |
+| `POST devops/error-logs/Export` | `devops.errorlogs.Export` | `ErrorReportFilter` | فایل `text/csv` با UTF-8 BOM، حداکثر 5000 ردیف. سلول شروع‌شده با `=`، `+`، `-` یا `@` با `'` خنثی می‌شود |
+| `POST devops/error-logs/Delete` | `devops.errorlogs.Delete` | `ErrorReportFilter` | `{ deleted }`. بدون `LastHours` یا هر دو تاریخ 400 است. کاربر و فیلتر با `LogWarning` ثبت می‌شوند |
+
+قانون‌های فیلتر:
+
+- `Page` از 1 شروع می‌شود. `PageSize` پیش‌فرض 20 و حداکثر 100 است.
+- `SortBy` برابر `date` یا `severity` است و `SortDir` پیش‌فرض `desc` است. رتبهٔ شدت: Critical، Error، Warning، بقیه.
+- `LastHours` روی ساعت سرور حساب می‌شود و `DateFrom` و `DateTo` را جایگزین می‌کند، چون ساعت مرورگر ممکن است با سرور فرق کند.
+- اگر هیچ بازه‌ای نیاید، Search و Facets و Stats و Export فقط 24 ساعت اخیر را می‌خوانند. Delete این پیش‌فرض را ندارد.
+- `MessageContains` و `StackTraceContains` روی متن کامل تکه‌ها جستجو می‌کنند. `OperationContains` و `TargetContains` روی ستون خودشان.
+
+متدهای نمایشگر در `IErrorLogger` پیاده‌سازی پیش‌فرض `NotSupportedException` دارند و فقط store این پکیج آن‌ها را نوشته است.
+
+ایندکس‌های نمایشگر با migration `AddErrorReportViewerIndexes` می‌آیند: `IX_ErrorReports_date`، `IX_ErrorReports_Severity_date`، `IX_ErrorReports_Operation`.
+
+### نگهداشت لاگ
+
+`ErrorLogRetentionService` فقط با store SQL ثبت می‌شود. تنظیم از `SRTCore_ErrorLog:Retention` است: `Enabled` پیش‌فرض `true` و `Days` پیش‌فرض `1`. هر ساعت ردیف‌های با `date` قدیمی‌تر از `Days` روز را در دسته‌های 5000 تایی پاک می‌کند و یک لاگ Information با تعداد می‌نویسد. `Days` کمتر از 1 رد می‌شود. خطای یک اجرا با سطح Warning لاگ می‌شود و اجرای ساعت بعد ادامه دارد. لغو هنگام توقف میزبان خطا نیست.
+
+```json
+"SRTCore_ErrorLog": { "Retention": { "Enabled": true, "Days": 1 } }
+```
 
 ---
 

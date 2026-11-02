@@ -104,6 +104,15 @@ namespace SRT.Core.Database.SQLServer.ErrorLog
 
                 entity.HasIndex(e => e.serviceID)
                     .HasDatabaseName("IX_ErrorReports_serviceID");
+
+                entity.HasIndex(e => e.date)
+                    .HasDatabaseName("IX_ErrorReports_date");
+
+                entity.HasIndex(e => new { e.Severity, e.date })
+                    .HasDatabaseName("IX_ErrorReports_Severity_date");
+
+                entity.HasIndex(e => e.Operation)
+                    .HasDatabaseName("IX_ErrorReports_Operation");
             });
         }
         #endregion
