@@ -191,11 +191,17 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Migrations
                         .HasDatabaseName("IX_ErrorReports_ErrorId")
                         .HasFilter("[ErrorId] IS NOT NULL");
 
+                    b.HasIndex("Operation")
+                        .HasDatabaseName("IX_ErrorReports_Operation");
+
                     b.HasIndex("Target")
                         .HasDatabaseName("IX_ErrorReports_Target");
 
                     b.HasIndex("category")
                         .HasDatabaseName("IX_ErrorReports_category");
+
+                    b.HasIndex("date")
+                        .HasDatabaseName("IX_ErrorReports_date");
 
                     b.HasIndex("serviceID")
                         .HasDatabaseName("IX_ErrorReports_serviceID");
@@ -205,6 +211,9 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Migrations
 
                     b.HasIndex("Category", "date")
                         .HasDatabaseName("IX_ErrorReports_Category_date");
+
+                    b.HasIndex("Severity", "date")
+                        .HasDatabaseName("IX_ErrorReports_Severity_date");
 
                     b.ToTable("ErrorReports", (string)null);
                 });

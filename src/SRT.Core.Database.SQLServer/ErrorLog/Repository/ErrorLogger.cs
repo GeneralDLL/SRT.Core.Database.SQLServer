@@ -1,4 +1,8 @@
-﻿using SRT.Core.Database.SQLServer.ErrorLog.Domain;
+﻿using System.Globalization;
+using System.Linq.Expressions;
+using System.Text;
+using System.Text.Json;
+using SRT.Core.Database.SQLServer.ErrorLog.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SRT.Core.Domain;
@@ -11,6 +15,13 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Repository
     {
         private const int MaxTake = 200;
         private const int DefaultTake = 50;
+        private const int MaxPageSize = 100;
+        private const int DefaultPageSize = 20;
+        private const int DefaultRangeHours = 24;
+        private const int StatsHourlyMaxHours = 48;
+        private const int MaxExportRows = 5000;
+        private const int MaxFacetValues = 50;
+        private const string UnknownSeverity = "Unknown";
 
         private readonly ErrorReportDBContext _dbContext;
         private readonly ILogger<ErrorReportDBContext> logger;
@@ -86,21 +97,7 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Repository
                 .Take(take);
 
             return await query
-                .Select(e => new ErrorReportSummary
-                {
-                    Id = e.id,
-                    ErrorId = e.ErrorId,
-                    Date = e.date,
-                    ServiceName = e.serviceName,
-                    Service = e.Service,
-                    Category = e.Category,
-                    Severity = e.Severity,
-                    Outcome = e.Outcome,
-                    ExceptionType = e.ExceptionType,
-                    Target = e.Target,
-                    CorrelationId = e.CorrelationId,
-                    Message = (e.Message1 ?? "") + (e.Message2 ?? "") + (e.Message3 ?? "") + (e.Message4 ?? "") + (e.Message5 ?? ""),
-                })
+                .Select(ToSummary)
                 .ToListAsync(ct);
         }
 
@@ -128,6 +125,18 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Repository
             filter.ExceptionType = NullIfEmpty(filter.ExceptionType);
             filter.Target = NullIfEmpty(filter.Target);
             filter.MessageContains = NullIfEmpty(filter.MessageContains);
+            filter.LegacyCategory = NullIfEmpty(filter.LegacyCategory);
+            filter.Version = NullIfEmpty(filter.Version);
+            filter.OperationContains = NullIfEmpty(filter.OperationContains);
+            filter.TargetContains = NullIfEmpty(filter.TargetContains);
+            filter.StackTraceContains = NullIfEmpty(filter.StackTraceContains);
+
+            if (filter.LastHours is > 0)
+            {
+                filter.DateTo = DateTime.Now;
+                filter.DateFrom = filter.DateTo.Value.AddHours(-filter.LastHours.Value);
+            }
+
             return filter;
         }
 
@@ -155,7 +164,13 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Repository
                 filter.ServiceId.HasValue ||
                 filter.DateFrom.HasValue ||
                 filter.DateTo.HasValue ||
-                filter.MessageContains != null;
+                filter.MessageContains != null ||
+                filter.DbId.HasValue ||
+                filter.LegacyCategory != null ||
+                filter.Version != null ||
+                filter.OperationContains != null ||
+                filter.TargetContains != null ||
+                filter.StackTraceContains != null;
 
             if (!hasCriteria)
                 throw new ArgumentException(
@@ -216,7 +231,294 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Repository
                     .Contains(term));
             }
 
+            if (filter.DbId.HasValue)
+                query = query.Where(e => e.id == filter.DbId.Value);
+
+            if (filter.LegacyCategory != null)
+                query = query.Where(e => e.category == filter.LegacyCategory);
+
+            if (filter.Version != null)
+                query = query.Where(e => e.Version == filter.Version);
+
+            if (filter.OperationContains != null)
+                query = query.Where(e => e.Operation!.Contains(filter.OperationContains));
+
+            if (filter.TargetContains != null)
+                query = query.Where(e => e.Target!.Contains(filter.TargetContains));
+
+            if (filter.StackTraceContains != null)
+            {
+                var term = filter.StackTraceContains;
+                query = query.Where(e =>
+                    ((e.StackTrace1 ?? "") + (e.StackTrace2 ?? "") + (e.StackTrace3 ?? "") + (e.StackTrace4 ?? "") + (e.StackTrace5 ?? ""))
+                    .Contains(term));
+            }
+
             return query;
+        }
+
+        #endregion
+
+        #region Viewer
+
+        public async Task<ErrorReportPage> SearchPageAsync(ErrorReportFilter filter, CancellationToken ct = default)
+        {
+            var query = ApplyFilter(_dbContext.ErrorReports.AsNoTracking(), NormalizeForViewer(filter));
+            var page = Math.Max(1, filter.Page);
+            var pageSize = filter.PageSize <= 0 ? DefaultPageSize : Math.Min(filter.PageSize, MaxPageSize);
+
+            var total = await query.CountAsync(ct);
+            var items = await Sort(query, filter)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(ToSummary)
+                .ToListAsync(ct);
+
+            return new ErrorReportPage { Items = items, Total = total, Page = page, PageSize = pageSize };
+        }
+
+        public async Task<ErrorReportDetail?> GetByIdAsync(long id, CancellationToken ct = default)
+        {
+            var row = await _dbContext.ErrorReports.AsNoTracking().FirstOrDefaultAsync(e => e.id == id, ct);
+            if (row is null)
+                return null;
+
+            return new ErrorReportDetail
+            {
+                Id = row.id,
+                ErrorId = row.ErrorId,
+                Date = row.date,
+                ServiceId = row.serviceID,
+                ServiceName = row.serviceName,
+                Service = row.Service,
+                Environment = row.Environment,
+                Version = row.Version,
+                Category = row.Category,
+                LegacyCategory = row.category,
+                Operation = row.Operation,
+                Severity = row.Severity,
+                Outcome = row.Outcome,
+                ExceptionType = row.ExceptionType,
+                Target = row.Target,
+                CorrelationId = row.CorrelationId,
+                Message = row.Message,
+                StackTrace = row.StackTrace,
+                ExceptionChain = new[]
+                {
+                    row.layer1, row.layer2, row.layer3, row.layer4, row.layer5,
+                    row.layer6, row.layer7, row.layer8, row.layer9, row.layer10,
+                    row.layer11, row.layer12, row.layer13, row.layer14, row.layer15,
+                    row.layer16, row.layer17, row.layer18, row.layer19, row.layer20,
+                }.Where(layer => !string.IsNullOrEmpty(layer)).ToList()!,
+                DetailJson = row.DetailJson,
+                Detail = ParseDetail(row.DetailJson),
+            };
+        }
+
+        public async Task<IReadOnlyList<ErrorReportSummary>> GetByCorrelationAsync(string correlationId, CancellationToken ct = default)
+        {
+            return await _dbContext.ErrorReports.AsNoTracking()
+                .Where(e => e.CorrelationId == correlationId)
+                .OrderBy(e => e.date)
+                .ThenBy(e => e.id)
+                .Take(MaxTake)
+                .Select(ToSummary)
+                .ToListAsync(ct);
+        }
+
+        public async Task<ErrorReportFacets> FacetsAsync(ErrorReportFilter filter, CancellationToken ct = default)
+        {
+            filter = NormalizeForViewer(filter);
+            var query = ApplyFilter(
+                _dbContext.ErrorReports.AsNoTracking(),
+                new ErrorReportFilter { DateFrom = filter.DateFrom, DateTo = filter.DateTo });
+
+            return new ErrorReportFacets
+            {
+                Severity = await FacetAsync(query, e => e.Severity, ct),
+                Category = await FacetAsync(query, e => e.Category, ct),
+                Outcome = await FacetAsync(query, e => e.Outcome, ct),
+                ExceptionType = await FacetAsync(query, e => e.ExceptionType, ct),
+                Environment = await FacetAsync(query, e => e.Environment, ct),
+                Version = await FacetAsync(query, e => e.Version, ct),
+                Operation = await FacetAsync(query, e => e.Operation, ct),
+            };
+        }
+
+        public async Task<ErrorReportStats> StatsAsync(ErrorReportFilter filter, CancellationToken ct = default)
+        {
+            filter = NormalizeForViewer(filter);
+            var query = ApplyFilter(_dbContext.ErrorReports.AsNoTracking(), filter).Where(e => e.date != null);
+            var from = filter.DateFrom ?? await query.MinAsync(e => e.date, ct) ?? DateTime.Now;
+            var hourly = (filter.DateTo ?? DateTime.Now) - from <= TimeSpan.FromHours(StatsHourlyMaxHours);
+
+            var rows = await query
+                .GroupBy(e => new
+                {
+                    e.date!.Value.Year,
+                    e.date.Value.Month,
+                    e.date.Value.Day,
+                    e.date.Value.Hour,
+                    e.Severity,
+                })
+                .Select(group => new { group.Key.Year, group.Key.Month, group.Key.Day, group.Key.Hour, group.Key.Severity, Count = group.Count() })
+                .ToListAsync(ct);
+
+            return new ErrorReportStats
+            {
+                Bucket = hourly ? "hour" : "day",
+                Items = rows
+                    .GroupBy(row => new DateTime(row.Year, row.Month, row.Day, hourly ? row.Hour : 0, 0, 0))
+                    .OrderBy(bucket => bucket.Key)
+                    .Select(bucket => new ErrorReportStatsBucket
+                    {
+                        Start = bucket.Key,
+                        Total = bucket.Sum(row => row.Count),
+                        BySeverity = bucket
+                            .GroupBy(row => row.Severity ?? UnknownSeverity)
+                            .ToDictionary(item => item.Key, item => item.Sum(row => row.Count)),
+                    })
+                    .ToList(),
+            };
+        }
+
+        public async Task<byte[]> ExportCsvAsync(ErrorReportFilter filter, CancellationToken ct = default)
+        {
+            var rows = await Sort(ApplyFilter(_dbContext.ErrorReports.AsNoTracking(), NormalizeForViewer(filter)), filter)
+                .Take(MaxExportRows)
+                .Select(ToSummary)
+                .ToListAsync(ct);
+
+            var csv = new StringBuilder("﻿");
+            csv.Append("Id,ErrorId,Date,Service,Environment,Category,Operation,Severity,Outcome,ExceptionType,Target,CorrelationId,Message\r\n");
+            foreach (var row in rows)
+            {
+                csv.AppendJoin(',', new[]
+                {
+                    row.Id.ToString(CultureInfo.InvariantCulture),
+                    row.ErrorId?.ToString(),
+                    row.Date?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    row.Service ?? row.ServiceName,
+                    row.Environment,
+                    row.Category,
+                    row.Operation,
+                    row.Severity,
+                    row.Outcome,
+                    row.ExceptionType,
+                    row.Target,
+                    row.CorrelationId,
+                    row.Message,
+                }.Select(CsvCell)).Append("\r\n");
+            }
+
+            return Encoding.UTF8.GetBytes(csv.ToString());
+        }
+
+        public async Task<int> PurgeOlderThanAsync(int days, int batch, CancellationToken ct = default)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
+            ArgumentOutOfRangeException.ThrowIfLessThan(batch, 1);
+
+            var cutoff = DateTime.Now.AddDays(-days);
+            var total = 0;
+            while (true)
+            {
+                var deleted = await _dbContext.ErrorReports
+                    .Where(e => e.date < cutoff)
+                    .OrderBy(e => e.id)
+                    .Take(batch)
+                    .ExecuteDeleteAsync(ct);
+                total += deleted;
+                if (deleted < batch)
+                    return total;
+            }
+        }
+
+        private static readonly Expression<Func<ErrorReport, ErrorReportSummary>> ToSummary = e => new ErrorReportSummary
+        {
+            Id = e.id,
+            ErrorId = e.ErrorId,
+            Date = e.date,
+            ServiceName = e.serviceName,
+            Service = e.Service,
+            Environment = e.Environment,
+            Category = e.Category,
+            Operation = e.Operation,
+            Severity = e.Severity,
+            Outcome = e.Outcome,
+            ExceptionType = e.ExceptionType,
+            Target = e.Target,
+            CorrelationId = e.CorrelationId,
+            Message = (e.Message1 ?? "") + (e.Message2 ?? "") + (e.Message3 ?? "") + (e.Message4 ?? "") + (e.Message5 ?? ""),
+        };
+
+        // Viewer reads never scan the whole table: an empty range means the last 24 hours.
+        private static ErrorReportFilter NormalizeForViewer(ErrorReportFilter filter)
+        {
+            filter = Normalize(filter);
+            if (filter.DateFrom is null && filter.DateTo is null)
+                filter.DateFrom = DateTime.Now.AddHours(-DefaultRangeHours);
+            return filter;
+        }
+
+        private static async Task<IReadOnlyList<ErrorReportFacetValue>> FacetAsync(
+            IQueryable<ErrorReport> query,
+            Expression<Func<ErrorReport, string?>> column,
+            CancellationToken ct)
+        {
+            return await query
+                .Select(column)
+                .Where(value => value != null)
+                .GroupBy(value => value)
+                .Select(group => new ErrorReportFacetValue { Value = group.Key!, Count = group.Count() })
+                .OrderByDescending(item => item.Count)
+                .Take(MaxFacetValues)
+                .ToListAsync(ct);
+        }
+
+        private static IOrderedQueryable<ErrorReport> Sort(IQueryable<ErrorReport> query, ErrorReportFilter filter)
+        {
+            var ascending = string.Equals(filter.SortDir, "asc", StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(filter.SortBy, "severity", StringComparison.OrdinalIgnoreCase))
+            {
+                Expression<Func<ErrorReport, int>> rank = e =>
+                    e.Severity == "Critical" ? 4 : e.Severity == "Error" ? 3 : e.Severity == "Warning" ? 2 : 1;
+                return (ascending ? query.OrderBy(rank) : query.OrderByDescending(rank))
+                    .ThenByDescending(e => e.date)
+                    .ThenByDescending(e => e.id);
+            }
+
+            return ascending
+                ? query.OrderBy(e => e.date).ThenBy(e => e.id)
+                : query.OrderByDescending(e => e.date).ThenByDescending(e => e.id);
+        }
+
+        private static object? ParseDetail(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                return document.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        // A leading = + - @ makes spreadsheets run the cell as a formula, and messages hold client input.
+        private static string CsvCell(string? value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "";
+
+            if ("=+-@\t\r".Contains(value[0]))
+                value = "'" + value;
+
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
         }
 
         #endregion

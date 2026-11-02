@@ -120,6 +120,7 @@ When `IsErrorLogSqlStore()` is true:
 - `MessageContains` searches the full concatenated message chunks in SQL
 - Search paging: `Skip` ≥ 0; `Take` default 50, max 200
 - Persist path logs via Serilog first; DB write is best-effort with a short timeout
+- هر سرویس با store SQL مسیر `devops/error-logs` را برای پنل DevOps باز می‌کند و `ErrorLogRetentionService` لاگ‌های قدیمی را پاک می‌کند. جزئیات در بخش ۹ API_REFERENCE است.
 
 Again: direct `ErrorReportDBContext` — **not** Repo/UoW bases.
 
