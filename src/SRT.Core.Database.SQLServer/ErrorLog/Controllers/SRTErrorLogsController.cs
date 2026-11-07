@@ -5,6 +5,7 @@ using SRT.Core.Authentication;
 using SRT.Core.Diagnostics;
 using SRT.Core.Domain.Diagnostics;
 using SRT.Core.SYS_Controllers;
+using SRT.Core.SystemEnums;
 
 namespace SRT.Core.Database.SQLServer.ErrorLog.Controllers
 {
@@ -32,12 +33,12 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Controllers
         }
 
         [HttpPost("Search")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.View)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.View)]
         public Task<IActionResult> Search([FromBody] ErrorReportFilter filter, CancellationToken ct)
             => RunAsync(async () => Response_OK(data: await _errors.SearchPageAsync(filter, ct)));
 
         [HttpGet("{id:long}")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.View)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.View)]
         public Task<IActionResult> Get(long id, CancellationToken ct)
             => RunAsync(async () =>
             {
@@ -46,22 +47,22 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Controllers
             });
 
         [HttpGet("ByCorrelation/{correlationId}")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.View)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.View)]
         public Task<IActionResult> ByCorrelation(string correlationId, CancellationToken ct)
             => RunAsync(async () => Response_OK(data: await _errors.GetByCorrelationAsync(correlationId, ct)));
 
         [HttpPost("Facets")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.View)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.View)]
         public Task<IActionResult> Facets([FromBody] ErrorReportFilter filter, CancellationToken ct)
             => RunAsync(async () => Response_OK(data: await _errors.FacetsAsync(filter, ct)));
 
         [HttpPost("Stats")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.View)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.View)]
         public Task<IActionResult> Stats([FromBody] ErrorReportFilter filter, CancellationToken ct)
             => RunAsync(async () => Response_OK(data: await _errors.StatsAsync(filter, ct)));
 
         [HttpPost("Export")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.Export)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.Export)]
         public Task<IActionResult> Export([FromBody] ErrorReportFilter filter, CancellationToken ct)
             => RunAsync(async () => File(
                 await _errors.ExportCsvAsync(filter, ct),
@@ -69,7 +70,7 @@ namespace SRT.Core.Database.SQLServer.ErrorLog.Controllers
                 $"error-logs-{DateTime.Now:yyyyMMdd-HHmmss}.csv"));
 
         [HttpPost("Delete")]
-        [CheckAuthMiddleWare("DevOps", requiredAccess: ErrorLogAccess.Delete)]
+        [CheckAuthMiddleWare(TypeAuthenticationController.DevOps, requiredAccess: ErrorLogAccess.Delete)]
         public Task<IActionResult> Delete([FromBody] ErrorReportFilter filter, CancellationToken ct)
             => RunAsync(async () =>
             {

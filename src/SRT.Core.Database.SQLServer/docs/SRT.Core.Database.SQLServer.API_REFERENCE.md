@@ -124,7 +124,7 @@ Task<int> DeleteByFilterAsync(Expression<Func<TEntity, bool>> predicate, Cancell
 | `IDatabaseEntryID` | `: IDatabaseEntryID<int>` |
 | `IDatabaseEntryActivity` | `bool isActive` |
 | `IDatabaseEntryAdmin` | `int? id_AdminChange`, `string? fullName_AdminChange` |
-| `IUserInfo` | `: IDatabaseEntryID`; `GetFullName()`, `string userType` |
+| `IUserInfo` | `: IDatabaseEntryID`; `GetFullName()`, `UserRoleType userRole` |
 
 ### Search / paging — `SRT.Core.Domain.BaseDomains`
 
@@ -265,7 +265,7 @@ Types: `ErrorReportDBContext`, `ErrorReport`, `ErrorLogger`, design-time factory
 
 ### نمایشگر لاگ خطا (پنل DevOps)
 
-وقتی `IsErrorLogSqlStore()` درست باشد، `SRTErrorLogsController` با `ErrorLogsControllerFeatureProvider` روی همان سرویس باز می‌شود و سرویس کد جدا نمی‌خواهد. کلاس کنترلر `internal` است تا کشف پیش‌فرض MVC آن را نبیند. Auth همهٔ اکشن‌ها `CheckAuthMiddleWare("DevOps")` با `requiredAccess` است، پس هدر `X-Active-Role` لازم است. superadmin هر دو چک را رد می‌کند.
+وقتی `IsErrorLogSqlStore()` درست باشد، `SRTErrorLogsController` با `ErrorLogsControllerFeatureProvider` روی همان سرویس باز می‌شود و سرویس کد جدا نمی‌خواهد. کلاس کنترلر `internal` است تا کشف پیش‌فرض MVC آن را نبیند. Auth همهٔ اکشن‌ها `TypeAuthenticationController.DevOps` با `requiredAccess` است، پس هدر `X-Active-Role` لازم است. superadmin هر دو چک را رد می‌کند.
 
 | روش و مسیر | دسترسی | بدنه | خروجی |
 |---|---|---|---|
